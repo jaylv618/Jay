@@ -681,6 +681,7 @@
                     </div>
                     
                     <div class="btn-container">
+                        <button id="serial-request-permission-btn" class="btn"><i class="fas fa-key"></i> 请求串口权限</button>
                         <button id="serial-refresh-btn" class="btn"><i class="fas fa-sync-alt"></i> 刷新串口</button>
                         <button id="serial-connect-btn" class="btn btn-serial"><i class="fas fa-plug"></i> 连接串口</button>
                         <button id="serial-disconnect-btn" class="btn btn-disconnect"><i class="fas fa-unplug"></i> 断开连接</button>
@@ -996,6 +997,7 @@
         const dataSizeInput = document.getElementById('data-size');
         
         // Modbus相关DOM元素
+        const serialRequestPermissionBtn = document.getElementById('serial-request-permission-btn');
         const serialRefreshBtn = document.getElementById('serial-refresh-btn');
         const serialConnectBtn = document.getElementById('serial-connect-btn');
         const serialDisconnectBtn = document.getElementById('serial-disconnect-btn');
@@ -1535,39 +1537,47 @@
                     return;
                 }
                 
-                const ports = await navigator.serial.getPorts();
-                serialPortList.innerHTML = '';
-                
-                if (ports.length === 0) {
-                    serialPortList.innerHTML = '<div class="serial-port-item">未找到串口设备</div>';
-                    return;
-                }
-                
-                ports.forEach(port => {
-                    const portItem = document.createElement('div');
-                    portItem.className = 'serial-port-item';
+                // 首先请求串口访问权限（如果需要的话）
+                try {
+                    const ports = await navigator.serial.getPorts();
+                    serialPortList.innerHTML = '';
                     
-                    // 尝试获取USB信息
-                    const info = port.getInfo();
-                    let displayText = '串口设备';
-                    
-                    if (info.usbVendorId && info.usbProductId) {
-                        displayText = `USB设备 (VID: 0x${info.usbVendorId.toString(16).padStart(4, '0')}, PID: 0x${info.usbProductId.toString(16).padStart(4, '0')})`;
+                    if (ports.length === 0) {
+                        serialPortList.innerHTML = '<div class="serial-port-item">未找到串口设备，请先连接USB串口设备</div>';
+                        return;
                     }
                     
-                    portItem.textContent = displayText;
-                    
-                    portItem.addEventListener('click', () => {
-                        document.querySelectorAll('.serial-port-item').forEach(item => {
-                            item.classList.remove('active');
+                    ports.forEach(port => {
+                        const portItem = document.createElement('div');
+                        portItem.className = 'serial-port-item';
+                        
+                        // 尝试获取USB信息
+                        const info = port.getInfo();
+                        let displayText = '串口设备';
+                        
+                        if (info.usbVendorId && info.usbProductId) {
+                            displayText = `USB设备 (VID: 0x${info.usbVendorId.toString(16).padStart(4, '0')}, PID: 0x${info.usbProductId.toString(16).padStart(4, '0')})`;
+                        }
+                        
+                        portItem.textContent = displayText;
+                        
+                        portItem.addEventListener('click', () => {
+                            document.querySelectorAll('.serial-port-item').forEach(item => {
+                                item.classList.remove('active');
+                            });
+                            portItem.classList.add('active');
                         });
-                        portItem.classList.add('active');
+                        
+                        serialPortList.appendChild(portItem);
                     });
                     
-                    serialPortList.appendChild(portItem);
-                });
-                
-                showNotification(`找到 ${ports.length} 个串口设备`, 'success');
+                    showNotification(`找到 ${ports.length} 个串口设备`, 'success');
+                    
+                } catch (error) {
+                    console.error('获取串口列表错误:', error);
+                    serialPortList.innerHTML = '<div class="serial-port-item">获取串口列表失败，请先请求串口权限</div>';
+                    throw error;
+                }
                 
             } catch (error) {
                 console.error('刷新串口错误:', error);
@@ -1584,21 +1594,38 @@
                     return;
                 }
                 
+                let selectedPort = null;
+                
+                // 检查是否有已选择的串口
                 const selectedPortItem = document.querySelector('.serial-port-item.active');
-                if (!selectedPortItem) {
-                    showNotification('请先选择串口设备', 'warning');
+                if (selectedPortItem && selectedPortItem.textContent !== '未找到串口设备，请先连接USB串口设备' && selectedPortItem.textContent !== '获取串口列表失败，请先请求串口权限') {
+                    const ports = await navigator.serial.getPorts();
+                    const portIndex = Array.from(document.querySelectorAll('.serial-port-item')).indexOf(selectedPortItem);
+                    if (portIndex >= 0 && portIndex < ports.length) {
+                        selectedPort = ports[portIndex];
+                    }
+                }
+                
+                // 如果没有选中的串口，请求用户选择
+                if (!selectedPort) {
+                    try {
+                        selectedPort = await navigator.serial.requestPort();
+                    } catch (error) {
+                        if (error.name === 'NotFoundError') {
+                            showNotification('用户取消了串口选择', 'warning');
+                            return;
+                        } else {
+                            throw error;
+                        }
+                    }
+                }
+                
+                if (!selectedPort) {
+                    showNotification('未选择有效的串口', 'error');
                     return;
                 }
                 
-                const ports = await navigator.serial.getPorts();
-                const portIndex = Array.from(document.querySelectorAll('.serial-port-item')).indexOf(selectedPortItem);
-                
-                if (portIndex < 0 || portIndex >= ports.length) {
-                    showNotification('选择的串口无效', 'error');
-                    return;
-                }
-                
-                serialPort = ports[portIndex];
+                serialPort = selectedPort;
                 const baudRate = parseInt(document.getElementById('serial-baudrate-select').value) || 115200;
                 
                 await serialPort.open({
@@ -1964,7 +1991,32 @@
             showNotification('Modbus数据记录已清除', 'info');
         }
         
+        // 请求串口权限
+        async function requestSerialPermission() {
+            try {
+                if (!navigator.serial) {
+                    showNotification('浏览器不支持WebSerial API', 'error');
+                    return;
+                }
+                
+                const port = await navigator.serial.requestPort();
+                showNotification('串口权限获取成功，请点击"刷新串口"查看设备', 'success');
+                
+                // 自动刷新串口列表
+                await refreshSerialPorts();
+                
+            } catch (error) {
+                if (error.name === 'NotFoundError') {
+                    showNotification('用户取消了串口选择', 'warning');
+                } else {
+                    console.error('请求串口权限错误:', error);
+                    showNotification(`请求权限失败: ${error.message}`, 'error');
+                }
+            }
+        }
+        
         // 绑定Modbus相关事件
+        serialRequestPermissionBtn.addEventListener('click', requestSerialPermission);
         serialRefreshBtn.addEventListener('click', refreshSerialPorts);
         serialConnectBtn.addEventListener('click', connectSerialPort);
         serialDisconnectBtn.addEventListener('click', disconnectSerialPort);
@@ -1976,8 +2028,14 @@
         updateStatus('准备连接设备...', 'disconnected');
         updateStatus('准备连接串口设备...', 'disconnected', true);
         
-        // 刷新串口列表
-        refreshSerialPorts();
+        // 检查浏览器兼容性
+        if (!navigator.serial) {
+            showNotification('浏览器不支持WebSerial API，请使用Chrome 89+或Edge 89+', 'error');
+            serialPortList.innerHTML = '<div class="serial-port-item" style="color: #ff6b6b;">浏览器不支持WebSerial API<br>请使用Chrome 89+或Edge 89+浏览器</div>';
+        } else {
+            // 刷新串口列表
+            refreshSerialPorts();
+        }
         
         // 下一部分将包含DFU功能实现
                 // =============================================
