@@ -185,6 +185,20 @@
             background: linear-gradient(to right, #8e2de2, #4a00e0);
         }
         
+        .btn:disabled {
+            background: #6c757d !important;
+            color: #adb5bd !important;
+            cursor: not-allowed !important;
+            opacity: 0.6;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+        
+        .btn:disabled:hover {
+            transform: none !important;
+            box-shadow: none !important;
+        }
+        
         .btn-container {
             display: flex;
             flex-wrap: wrap;
@@ -595,18 +609,18 @@
                 <div class="panel">
                     <h2 class="panel-title"><i class="fas fa-code"></i> 报告描述符</h2>
                     <textarea id="report-descriptor" placeholder="在此处粘贴您的报告描述符...">0x06, 0x00, 0xFF,  // Usage Page (Vendor Defined 0xFF00)
-0x09, 0x01,        // Usage (Vendor 1)
-0xA1, 0x01,        // Collection (Application)
-0x85, 0x01,        //   Report ID (1)
-0x09, 0x02,        //   Usage (Vendor 2)
-0x15, 0x00,        //   Logical Minimum (0)
-0x26, 0xFF, 0x00,  //   Logical Maximum (255)
-0x75, 0x08,        //   Report Size (8 bits)
-0x95, 0x08,        //   Report Count (8 bytes)
-0x81, 0x02,        //   Input (Data,Var,Abs)
-0x09, 0x03,        //   Usage (Vendor 3)
-0x91, 0x02,        //   Output (Data,Var,Abs)
-0xC0               // End Collection</textarea>
+                        0x09, 0x01,        // Usage (Vendor 1)
+                        0xA1, 0x01,        // Collection (Application)
+                        0x85, 0x01,        //   Report ID (1)
+                        0x09, 0x02,        //   Usage (Vendor 2)
+                        0x15, 0x00,        //   Logical Minimum (0)
+                        0x26, 0xFF, 0x00,  //   Logical Maximum (255)
+                        0x75, 0x08,        //   Report Size (8 bits)
+                        0x95, 0x08,        //   Report Count (8 bytes)
+                        0x81, 0x02,        //   Input (Data,Var,Abs)
+                        0x09, 0x03,        //   Usage (Vendor 3)
+                        0x91, 0x02,        //   Output (Data,Var,Abs)
+                        0xC0               // End Collection</textarea>
                     
                     <div class="troubleshooting">
                         <h3><i class="fas fa-tools"></i> 发送失败常见原因</h3>
@@ -1247,6 +1261,9 @@
                 showNotification(`已连接: ${hidDevice.productName || 'HID设备'}`, 'success');
                 updateStatus('已连接 - 等待数据...', 'connected');
                 
+                // 禁用连接按钮
+                connectBtn.disabled = true;
+                
             } catch (error) {
                 console.error('连接错误:', error);
                 showNotification(`连接失败: ${error.message}`, 'error');
@@ -1268,6 +1285,9 @@
             productId.textContent = '-';
             errorDetails.innerHTML = '';
             
+            // 重新启用连接按钮
+            connectBtn.disabled = false;
+            
             showNotification('已重置设备状态', 'info');
             updateStatus('准备连接设备...', 'disconnected');
         });
@@ -1285,6 +1305,9 @@
                 deviceName.textContent = '-';
                 vendorId.textContent = '-';
                 productId.textContent = '-';
+                
+                // 重新启用连接按钮
+                connectBtn.disabled = false;
                 
                 showNotification('设备已断开', 'info');
                 updateStatus('设备已断开', 'disconnected');
@@ -1651,6 +1674,9 @@
                 // 开始读取数据
                 readSerialData();
                 
+                // 禁用连接按钮
+                serialConnectBtn.disabled = true;
+                
                 showNotification('串口连接成功', 'success');
                 updateStatus('已连接 - 等待数据...', 'connected', true);
                 
@@ -1972,6 +1998,9 @@
                 serialPortName.textContent = '-';
                 serialBaudrate.textContent = '-';
                 
+                // 重新启用连接按钮
+                serialConnectBtn.disabled = false;
+                
                 showNotification('串口已断开', 'info');
                 updateStatus('串口已断开', 'disconnected', true);
                 
@@ -2027,6 +2056,12 @@
         // 初始状态
         updateStatus('准备连接设备...', 'disconnected');
         updateStatus('准备连接串口设备...', 'disconnected', true);
+        updateStatus('准备连接DFU设备...', 'disconnected', false, true);
+        
+        // 确保所有连接按钮初始状态为启用
+        connectBtn.disabled = false;
+        serialConnectBtn.disabled = false;
+        dfuConnectBtn.disabled = false;
         
         // 检查浏览器兼容性
         if (!navigator.serial) {
@@ -2091,6 +2126,9 @@
                 // 设置接收数据监听器
                 await getDfuStatus();
                 
+                // 禁用连接按钮
+                dfuConnectBtn.disabled = true;
+                
                 showNotification(`已连接: ${dfuDevice.productName || 'DFU设备'}`, 'success');
                 updateStatus('已连接 - 准备就绪', 'connected', false, true);
                 
@@ -2127,6 +2165,9 @@
                 dfuDeviceName.textContent = '-';
                 dfuVendorId.textContent = '-';
                 dfuProductId.textContent = '-';
+                
+                // 重新启用连接按钮
+                dfuConnectBtn.disabled = false;
                 
                 showNotification('设备已断开', 'info');
                 updateStatus('设备已断开', 'disconnected', false, true);
